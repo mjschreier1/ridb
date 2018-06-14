@@ -2,20 +2,23 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 )
 
-// Orgs is a slice of all organizations
-var Orgs []Organization
-
 func main() {
 	output := ""
 
-	Orgs = getOrgs()
-	Orgs = append(Orgs, Organization{ID: 0, Name: "ROOT"})
-	for _, org := range Orgs {
+	orgs := getOrgs()
+	orgs = append(orgs, Organization{ID: 0, Name: "ROOT"})
+	for _, org := range orgs {
+		if org.ID != 0 {
+			parentNode, err := GetOrgByID(orgs, org.ParentID)
+			checkError(err)
+			org.SetParent(parentNode)
+		}
 		output += fmt.Sprintf("OrgID: %d\n", org.ID)
 	}
 
@@ -30,9 +33,7 @@ func main() {
 	}
 
 	err := ioutil.WriteFile("hello.txt", []byte(output), 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
+	checkError(err)
 }
 
 // TreeNode defines the methods for our n-ary tree of nodes
@@ -45,6 +46,16 @@ type TreeNode interface {
 	AddChild(c TreeNode)
 	GetName() string
 }
+
+// GetNodeByID takes a slice of nodes (i.e. orgs) and returns the node that matches the provided id
+// func GetNodeByID(nodes []TreeNode, id int) TreeNode {
+// 	for _, node := range nodes {
+// 		if node.GetID() == id {
+// 			return node
+// 		}
+// 	}
+// 	return nil
+// }
 
 // Organization is the data type of organizations from data/Organizations_API_v1.json and IMPLEMENTS TreeNode
 type Organization struct {
@@ -63,13 +74,9 @@ func getOrgs() []Organization {
 	var orgs organizationsDataFormat
 
 	orgData, err := ioutil.ReadFile("data/Organizations_API_v1.json")
-	if err != nil {
-		log.Fatal(err)
-	}
+	checkError(err)
 	err = json.Unmarshal(orgData, &orgs)
-	if err != nil {
-		log.Fatal(err)
-	}
+	checkError(err)
 	return orgs.Organizations
 }
 
@@ -91,6 +98,7 @@ func (o Organization) GetParent() TreeNode {
 // SetParent sets an Organization's parent TreeNode
 func (o Organization) SetParent(parent TreeNode) {
 	o.Parent = parent
+	parent.AddChild(o)
 }
 
 // GetChildren returns an Organization's children
@@ -106,6 +114,16 @@ func (o Organization) AddChild(child TreeNode) {
 // GetName returns an Organization's name
 func (o Organization) GetName() string {
 	return o.Name
+}
+
+// GetOrgByID finds an org by ID
+func GetOrgByID(orgs []Organization, id int) (Organization, error) {
+	for _, org := range orgs {
+		if org.ID == id {
+			return org, nil
+		}
+	}
+	return Organization{}, errors.New("GetOrgByID: ID out of range")
 }
 
 // RecArea is the data type of recreation areas from data/RecAreas_API_v1.json and IMPLEMENTS TreeNode
@@ -124,13 +142,9 @@ func getRecAreas() []RecArea {
 	var recAreas recAreasDataFormat
 
 	recAreaData, err := ioutil.ReadFile("data/RecAreas_API_v1.json")
-	if err != nil {
-		log.Fatal(err)
-	}
+	checkError(err)
 	err = json.Unmarshal(recAreaData, &recAreas)
-	if err != nil {
-		log.Fatal(err)
-	}
+	checkError(err)
 	return recAreas.RecAreas
 }
 
@@ -152,6 +166,7 @@ func (r RecArea) GetParent() TreeNode {
 // SetParent sets an RecArea's parent TreeNode
 func (r RecArea) SetParent(parent TreeNode) {
 	r.Parent = parent
+	parent.AddChild(r)
 }
 
 // GetChildren returns an RecArea's children
@@ -169,6 +184,16 @@ func (r RecArea) GetName() string {
 	return r.Name
 }
 
+// GetRecAreaByID finds an recArea by ID
+func GetRecAreaByID(recAreas []RecArea, id int) (RecArea, error) {
+	for _, recArea := range recAreas {
+		if recArea.ID == id {
+			return recArea, nil
+		}
+	}
+	return RecArea{}, errors.New("GetRecAreaByID: ID out of range")
+}
+
 // Facility is the data type of facilities from data/Facilities_API_v1.json and IMPLEMENTS TreeNode
 type Facility struct {
 	Name   string `json:"FacilityName"`
@@ -184,13 +209,9 @@ func getFacilities() []Facility {
 	var facilities facilitiesDataFormat
 
 	facilitiesData, err := ioutil.ReadFile("data/Facilities_API_v1.json")
-	if err != nil {
-		log.Fatal(err)
-	}
+	checkError(err)
 	err = json.Unmarshal(facilitiesData, &facilities)
-	if err != nil {
-		log.Fatal(err)
-	}
+	checkError(err)
 	return facilities.Facilities
 }
 
@@ -212,6 +233,7 @@ func (f Facility) GetParent() TreeNode {
 // SetParent sets an Facility's parent TreeNode
 func (f Facility) SetParent(parent TreeNode) {
 	f.Parent = parent
+	parent.AddChild(f)
 }
 
 // GetChildren returns an Facility's children
@@ -229,6 +251,16 @@ func (f Facility) GetName() string {
 	return f.Name
 }
 
+// GetFacilityByID finds an facility by ID
+func GetFacilityByID(facilities []Facility, id int) (Facility, error) {
+	for _, facility := range facilities {
+		if facility.ID == id {
+			return facility, nil
+		}
+	}
+	return Facility{}, errors.New("GetFacilityByID: ID out of range")
+}
+
 // RecAreaFacilityLink is the data type of data/RecAreaFacilities_API_v1.json and links facilities to their rec area
 type RecAreaFacilityLink struct {
 	RecAreaID  int
@@ -240,4 +272,10 @@ type OrgEntityLink struct {
 	OrgID      int
 	EntityID   int
 	EntityType string
+}
+
+func checkError(err error) {
+	if err != nil {
+		log.Fatal("Error: ", err)
+	}
 }
