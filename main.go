@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -22,7 +23,7 @@ type Organization struct {
 
 // RecArea is the data type of recreation areas from data/RecAreas_API_v1.json and IMPLEMENTS TreeNode
 type RecArea struct {
-	OrgRecAreaID    string  `json:"OrgRecAreaID"`
+	OrgRecAreaID    float64 `json:"OrgRecAreaID"`
 	LastUpdatedDate string  `json:"LastUpdatedDate"`
 	Email           string  `json:"RecAreaEmail"`
 	ReservationURL  string  `json:"RecAreaReservationURL"`
@@ -61,6 +62,19 @@ type Facility struct {
 	Keywords          string  `json:"Keywords"`
 }
 
+// RecAreaFacilityLink is the data type of data/RecAreaFacilities_API_v1.json and links facilities to their rec area
+type RecAreaFacilityLink struct {
+	RecAreaID  int
+	FacilityID int
+}
+
+// OrgEntityLink is the data type of data/OrgEntities_API_v1.json and link orgs to rec areas and facilities
+type OrgEntityLink struct {
+	OrgID      int
+	EntityID   int
+	EntityType string
+}
+
 // TreeNode defines the methods for our n-ary tree of nodes
 type TreeNode interface {
 	GetID() string
@@ -73,17 +87,72 @@ type TreeNode interface {
 }
 
 func main() {
-	data, err := ioutil.ReadDir("data")
+	orgs := getOrgs()
+	for _, org := range orgs {
+		fmt.Printf("OrgID: %d\n", org.ID)
+	}
+
+	recAreas := getRecAreas()
+	for _, recArea := range recAreas {
+		fmt.Printf("RecAreaID: %d\n", recArea.ID)
+	}
+
+	facilities := getFacilities()
+	for _, facility := range facilities {
+		fmt.Printf("FacilityID: %d\n", facility.ID)
+	}
+}
+
+func getOrgs() []Organization {
+	// Organizations matches the data being input to the program
+	type organizationsDataFormat struct {
+		Organizations []Organization `json:"RECDATA"`
+	}
+	var orgs organizationsDataFormat
+
+	orgData, err := ioutil.ReadFile("data/Organizations_API_v1.json")
 	if err != nil {
 		log.Fatal(err)
 	}
-	for _, file := range data {
-		content, err := ioutil.ReadFile(fmt.Sprintf("data/%s", file.Name()))
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Printf("%s:\n%s\n\n\n\n\n", file.Name(), content)
+	err = json.Unmarshal(orgData, &orgs)
+	if err != nil {
+		log.Fatal(err)
 	}
+	return orgs.Organizations
+}
 
-	// fmt.Printf("Organizations File: \n%s", organizations)
+func getRecAreas() []RecArea {
+	// RecAreas matches the data being input to the program
+	type recAreasDataFormat struct {
+		RecAreas []RecArea `json:"RECDATA"`
+	}
+	var recAreas recAreasDataFormat
+
+	recAreaData, err := ioutil.ReadFile("data/RecAreas_API_v1.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = json.Unmarshal(recAreaData, &recAreas)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return recAreas.RecAreas
+}
+
+func getFacilities() []Facility {
+	// Facilities matches the being input to the program
+	type facilitiesDataFormat struct {
+		Facilities []Facility `json:"RECDATA"`
+	}
+	var facilities facilitiesDataFormat
+
+	facilitiesData, err := ioutil.ReadFile("data/Facilities_API_v1.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = json.Unmarshal(facilitiesData, &facilities)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return facilities.Facilities
 }
