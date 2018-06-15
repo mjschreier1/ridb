@@ -32,6 +32,21 @@ func main() {
 		output += fmt.Sprintf("FacilityID: %d\n", facility.ID)
 	}
 
+	orgEntityLinks := getOrgEntityLinks()
+	for _, orgEntityLink := range orgEntityLinks {
+		parentNode, err := GetOrgByID(orgs, orgEntityLink.OrgID)
+		checkError(err)
+		if orgEntityLink.EntityType == "RecArea" {
+			childNode, err := GetRecAreaByID(recAreas, orgEntityLink.EntityID)
+			checkError(err)
+			childNode.SetParent(parentNode)
+		} else if orgEntityLink.EntityType == "Facility" {
+			childNode, err := GetFacilityByID(facilities, orgEntityLink.EntityID)
+			checkError(err)
+			childNode.SetParent(parentNode)
+		}
+	}
+
 	err := ioutil.WriteFile("hello.txt", []byte(output), 0644)
 	checkError(err)
 }
@@ -67,7 +82,6 @@ type Organization struct {
 }
 
 func getOrgs() []Organization {
-	// Organizations matches the data being input to the program
 	type organizationsDataFormat struct {
 		Organizations []Organization `json:"RECDATA"`
 	}
@@ -135,7 +149,6 @@ type RecArea struct {
 }
 
 func getRecAreas() []RecArea {
-	// RecAreas matches the data being input to the program
 	type recAreasDataFormat struct {
 		RecAreas []RecArea `json:"RECDATA"`
 	}
@@ -202,7 +215,6 @@ type Facility struct {
 }
 
 func getFacilities() []Facility {
-	// Facilities matches the being input to the program
 	type facilitiesDataFormat struct {
 		Facilities []Facility `json:"RECDATA"`
 	}
@@ -272,6 +284,19 @@ type OrgEntityLink struct {
 	OrgID      int
 	EntityID   int
 	EntityType string
+}
+
+func getOrgEntityLinks() []OrgEntityLink {
+	type orgEntityLinksDataFormat struct {
+		OrgEntityLinks []OrgEntityLink `json:"RECDATA"`
+	}
+	var orgEntityLinks orgEntityLinksDataFormat
+
+	orgEntityLinksData, err := ioutil.ReadFile("data/Organizations_API_v1.json")
+	checkError(err)
+	err = json.Unmarshal(orgEntityLinksData, &orgEntityLinks)
+	checkError(err)
+	return orgEntityLinks.OrgEntityLinks
 }
 
 func checkError(err error) {
