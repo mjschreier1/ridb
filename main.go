@@ -9,31 +9,23 @@ import (
 )
 
 func main() {
-	// output := ""
+	output := ""
 
 	orgs := getOrgs()
-	for _, org := range *orgs {
+	for _, org := range orgs {
 		if org.ID != 0 {
-			parentNode, err := GetOrgByID(*orgs, org.ParentID)
+			parentNode, err := GetOrgByID(orgs, org.ParentID)
 			checkError(err)
 			org.SetParent(parentNode)
 		}
-		// output += fmt.Sprintf("OrgID: %d\n", org.ID)
 	}
 
 	recAreas := getRecAreas()
-	// for _, recArea := range recAreas {
-	// 	output += fmt.Sprintf("RecAreaID: %d\n", recArea.ID)
-	// }
-
 	facilities := getFacilities()
-	// for _, facility := range facilities {
-	// 	output += fmt.Sprintf("FacilityID: %d\n", facility.ID)
-	// }
 
 	orgEntityLinks := getOrgEntityLinks()
 	for _, orgEntityLink := range orgEntityLinks {
-		parentNode, err := GetOrgByID(*orgs, orgEntityLink.OrgID)
+		parentNode, err := GetOrgByID(orgs, orgEntityLink.OrgID)
 		checkError(err)
 		if orgEntityLink.EntityType == "RecArea" {
 			childNode, err := GetRecAreaByID(recAreas, orgEntityLink.EntityID)
@@ -46,16 +38,26 @@ func main() {
 		}
 	}
 
-	// Testing some sample outputs
-	oneTwoSix, e := GetOrgByID(*orgs, 126)
-	root, e := GetOrgByID(*orgs, 0)
-	checkError(e)
-	oneTwoSix.SetParent(root)
-	fmt.Println(oneTwoSix)
-	fmt.Println(GetOrgByID(*orgs, 126))
+	recAreaFacilityLinks := getRecAreaFacilityLinks()
+	for _, recAreaFacility := range recAreaFacilityLinks {
+		parentNode, err := GetRecAreaByID(recAreas, recAreaFacility.RecAreaID)
+		checkError(err)
+		childNode, err := GetFacilityByID(facilities, recAreaFacility.FacilityID)
+		checkError(err)
+		childNode.SetParent(parentNode)
+	}
 
-	// err := ioutil.WriteFile("hello.txt", []byte(output), 0644)
-	// checkError(err)
+	// Testing n-ary tree using RecAreas
+	for _, recArea := range recAreas {
+		children := ""
+		for _, child := range recArea.GetChildren() {
+			children += fmt.Sprintf("    Child: %s\n", child.GetName())
+		}
+		output += (fmt.Sprintf("RecArea: %s, Parent: %s\n%s", recArea.GetName(), recArea.GetParent().GetName(), children))
+	}
+
+	err := ioutil.WriteFile("hello.txt", []byte(output), 0644)
+	checkError(err)
 }
 
 // TreeNode defines the methods for our n-ary tree of nodes
@@ -69,16 +71,6 @@ type TreeNode interface {
 	GetName() string
 }
 
-// GetNodeByID takes a slice of nodes (i.e. orgs) and returns the node that matches the provided id
-// func GetNodeByID(nodes []TreeNode, id int) TreeNode {
-// 	for _, node := range nodes {
-// 		if node.GetID() == id {
-// 			return node
-// 		}
-// 	}
-// 	return nil
-// }
-
 // Organization is the data type of organizations from data/Organizations_API_v1.json and IMPLEMENTS TreeNode
 type Organization struct {
 	ID       int    `json:"OrgID"`
@@ -88,9 +80,9 @@ type Organization struct {
 	Children []TreeNode
 }
 
-func getOrgs() *[]Organization {
+func getOrgs() []*Organization {
 	type organizationsDataFormat struct {
-		Organizations []Organization `json:"RECDATA"`
+		Organizations []*Organization `json:"RECDATA"`
 	}
 	var orgs organizationsDataFormat
 
@@ -98,8 +90,9 @@ func getOrgs() *[]Organization {
 	checkError(err)
 	err = json.Unmarshal(orgData, &orgs)
 	checkError(err)
-	orgs.Organizations = append(orgs.Organizations, Organization{ID: 0, Name: "ROOT"})
-	return &orgs.Organizations
+	virtualRoot := Organization{ID: 0, Name: "ROOT"}
+	orgs.Organizations = append(orgs.Organizations, &virtualRoot)
+	return orgs.Organizations
 }
 
 // GetID returns an Organization's ID
@@ -124,7 +117,7 @@ func (o *Organization) SetParent(parent TreeNode) {
 }
 
 // GetChildren returns an Organization's children
-func (o Organization) GetChildren() []TreeNode {
+func (o *Organization) GetChildren() []TreeNode {
 	return o.Children
 }
 
@@ -139,10 +132,10 @@ func (o *Organization) GetName() string {
 }
 
 // GetOrgByID finds an org by ID
-func GetOrgByID(orgs []Organization, id int) (*Organization, error) {
+func GetOrgByID(orgs []*Organization, id int) (*Organization, error) {
 	for _, org := range orgs {
 		if org.ID == id {
-			return &org, nil
+			return org, nil
 		}
 	}
 	return &Organization{}, errors.New("GetOrgByID: ID out of range")
@@ -156,9 +149,9 @@ type RecArea struct {
 	Children []TreeNode
 }
 
-func getRecAreas() []RecArea {
+func getRecAreas() []*RecArea {
 	type recAreasDataFormat struct {
-		RecAreas []RecArea `json:"RECDATA"`
+		RecAreas []*RecArea `json:"RECDATA"`
 	}
 	var recAreas recAreasDataFormat
 
@@ -170,49 +163,49 @@ func getRecAreas() []RecArea {
 }
 
 // GetID returns an RecArea's ID
-func (r RecArea) GetID() int {
+func (r *RecArea) GetID() int {
 	return r.ID
 }
 
 // GetType returns RecArea when called on an RecArea object
-func (r RecArea) GetType() string {
+func (r *RecArea) GetType() string {
 	return "RecArea"
 }
 
 // GetParent returns an RecArea's parent TreeNode
-func (r RecArea) GetParent() TreeNode {
+func (r *RecArea) GetParent() TreeNode {
 	return r.Parent
 }
 
 // SetParent sets an RecArea's parent TreeNode
-func (r RecArea) SetParent(parent TreeNode) {
+func (r *RecArea) SetParent(parent TreeNode) {
 	r.Parent = parent
 	parent.AddChild(r)
 }
 
 // GetChildren returns an RecArea's children
-func (r RecArea) GetChildren() []TreeNode {
+func (r *RecArea) GetChildren() []TreeNode {
 	return r.Children
 }
 
 // AddChild adds a child TreeNode to an RecArea
-func (r RecArea) AddChild(child TreeNode) {
+func (r *RecArea) AddChild(child TreeNode) {
 	r.Children = append(r.Children, child)
 }
 
 // GetName returns an RecArea's name
-func (r RecArea) GetName() string {
+func (r *RecArea) GetName() string {
 	return r.Name
 }
 
 // GetRecAreaByID finds an recArea by ID
-func GetRecAreaByID(recAreas []RecArea, id int) (RecArea, error) {
+func GetRecAreaByID(recAreas []*RecArea, id int) (*RecArea, error) {
 	for _, recArea := range recAreas {
 		if recArea.ID == id {
 			return recArea, nil
 		}
 	}
-	return RecArea{}, errors.New("GetRecAreaByID: ID out of range")
+	return &RecArea{}, errors.New("GetRecAreaByID: ID out of range")
 }
 
 // Facility is the data type of facilities from data/Facilities_API_v1.json and IMPLEMENTS TreeNode
@@ -222,9 +215,9 @@ type Facility struct {
 	Parent TreeNode
 }
 
-func getFacilities() []Facility {
+func getFacilities() []*Facility {
 	type facilitiesDataFormat struct {
-		Facilities []Facility `json:"RECDATA"`
+		Facilities []*Facility `json:"RECDATA"`
 	}
 	var facilities facilitiesDataFormat
 
@@ -236,55 +229,49 @@ func getFacilities() []Facility {
 }
 
 // GetID returns an Facility's ID
-func (f Facility) GetID() int {
+func (f *Facility) GetID() int {
 	return f.ID
 }
 
 // GetType returns Facility when called on an Facility object
-func (f Facility) GetType() string {
+func (f *Facility) GetType() string {
 	return "Facility"
 }
 
 // GetParent returns an Facility's parent TreeNode
-func (f Facility) GetParent() TreeNode {
+func (f *Facility) GetParent() TreeNode {
 	return f.Parent
 }
 
 // SetParent sets an Facility's parent TreeNode
-func (f Facility) SetParent(parent TreeNode) {
+func (f *Facility) SetParent(parent TreeNode) {
 	f.Parent = parent
 	parent.AddChild(f)
 }
 
 // GetChildren returns an Facility's children
-func (f Facility) GetChildren() []TreeNode {
+func (f *Facility) GetChildren() []TreeNode {
 	return nil
 }
 
 // AddChild adds a child TreeNode to an Facility
-func (f Facility) AddChild(child TreeNode) {
+func (f *Facility) AddChild(child TreeNode) {
 	log.Fatal("Facilities cannot have children")
 }
 
 // GetName returns an Facility's name
-func (f Facility) GetName() string {
+func (f *Facility) GetName() string {
 	return f.Name
 }
 
 // GetFacilityByID finds an facility by ID
-func GetFacilityByID(facilities []Facility, id int) (Facility, error) {
+func GetFacilityByID(facilities []*Facility, id int) (*Facility, error) {
 	for _, facility := range facilities {
 		if facility.ID == id {
 			return facility, nil
 		}
 	}
-	return Facility{}, errors.New("GetFacilityByID: ID out of range")
-}
-
-// RecAreaFacilityLink is the data type of data/RecAreaFacilities_API_v1.json and links facilities to their rec area
-type RecAreaFacilityLink struct {
-	RecAreaID  int
-	FacilityID int
+	return &Facility{}, errors.New("GetFacilityByID: ID out of range")
 }
 
 // OrgEntityLink is the data type of data/OrgEntities_API_v1.json and link orgs to rec areas and facilities
@@ -300,11 +287,30 @@ func getOrgEntityLinks() []OrgEntityLink {
 	}
 	var orgEntityLinks orgEntityLinksDataFormat
 
-	orgEntityLinksData, err := ioutil.ReadFile("data/Organizations_API_v1.json")
+	orgEntityLinksData, err := ioutil.ReadFile("data/OrgEntities_API_v1.json")
 	checkError(err)
 	err = json.Unmarshal(orgEntityLinksData, &orgEntityLinks)
 	checkError(err)
 	return orgEntityLinks.OrgEntityLinks
+}
+
+// RecAreaFacilityLink is the data type of data/RecAreaFacilities_API_v1.json and links facilities to their rec area
+type RecAreaFacilityLink struct {
+	RecAreaID  int
+	FacilityID int
+}
+
+func getRecAreaFacilityLinks() []RecAreaFacilityLink {
+	type RecAreaFacilityLinkDataFormat struct {
+		RecAreaFacilityLinks []RecAreaFacilityLink `json:"RECDATA"`
+	}
+	var recAreaFacilityLinks RecAreaFacilityLinkDataFormat
+
+	recAreaFacilityLinksData, err := ioutil.ReadFile("data/RecAreaFacilities_API_v1.json")
+	checkError(err)
+	err = json.Unmarshal(recAreaFacilityLinksData, &recAreaFacilityLinks)
+	checkError(err)
+	return recAreaFacilityLinks.RecAreaFacilityLinks
 }
 
 func checkError(err error) {
