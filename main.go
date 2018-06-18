@@ -9,32 +9,31 @@ import (
 )
 
 func main() {
-	output := ""
+	// output := ""
 
 	orgs := getOrgs()
-	orgs = append(orgs, Organization{ID: 0, Name: "ROOT"})
-	for _, org := range orgs {
+	for _, org := range *orgs {
 		if org.ID != 0 {
-			parentNode, err := GetOrgByID(orgs, org.ParentID)
+			parentNode, err := GetOrgByID(*orgs, org.ParentID)
 			checkError(err)
 			org.SetParent(parentNode)
 		}
-		output += fmt.Sprintf("OrgID: %d\n", org.ID)
+		// output += fmt.Sprintf("OrgID: %d\n", org.ID)
 	}
 
 	recAreas := getRecAreas()
-	for _, recArea := range recAreas {
-		output += fmt.Sprintf("RecAreaID: %d\n", recArea.ID)
-	}
+	// for _, recArea := range recAreas {
+	// 	output += fmt.Sprintf("RecAreaID: %d\n", recArea.ID)
+	// }
 
 	facilities := getFacilities()
-	for _, facility := range facilities {
-		output += fmt.Sprintf("FacilityID: %d\n", facility.ID)
-	}
+	// for _, facility := range facilities {
+	// 	output += fmt.Sprintf("FacilityID: %d\n", facility.ID)
+	// }
 
 	orgEntityLinks := getOrgEntityLinks()
 	for _, orgEntityLink := range orgEntityLinks {
-		parentNode, err := GetOrgByID(orgs, orgEntityLink.OrgID)
+		parentNode, err := GetOrgByID(*orgs, orgEntityLink.OrgID)
 		checkError(err)
 		if orgEntityLink.EntityType == "RecArea" {
 			childNode, err := GetRecAreaByID(recAreas, orgEntityLink.EntityID)
@@ -47,8 +46,16 @@ func main() {
 		}
 	}
 
-	err := ioutil.WriteFile("hello.txt", []byte(output), 0644)
-	checkError(err)
+	// Testing some sample outputs
+	oneTwoSix, e := GetOrgByID(*orgs, 126)
+	root, e := GetOrgByID(*orgs, 0)
+	checkError(e)
+	oneTwoSix.SetParent(root)
+	fmt.Println(oneTwoSix)
+	fmt.Println(GetOrgByID(*orgs, 126))
+
+	// err := ioutil.WriteFile("hello.txt", []byte(output), 0644)
+	// checkError(err)
 }
 
 // TreeNode defines the methods for our n-ary tree of nodes
@@ -81,7 +88,7 @@ type Organization struct {
 	Children []TreeNode
 }
 
-func getOrgs() []Organization {
+func getOrgs() *[]Organization {
 	type organizationsDataFormat struct {
 		Organizations []Organization `json:"RECDATA"`
 	}
@@ -91,26 +98,27 @@ func getOrgs() []Organization {
 	checkError(err)
 	err = json.Unmarshal(orgData, &orgs)
 	checkError(err)
-	return orgs.Organizations
+	orgs.Organizations = append(orgs.Organizations, Organization{ID: 0, Name: "ROOT"})
+	return &orgs.Organizations
 }
 
 // GetID returns an Organization's ID
-func (o Organization) GetID() int {
+func (o *Organization) GetID() int {
 	return o.ID
 }
 
 // GetType returns Organization when called on an Organization object
-func (o Organization) GetType() string {
+func (o *Organization) GetType() string {
 	return "Organization"
 }
 
 // GetParent returns an Organization's parent TreeNode
-func (o Organization) GetParent() TreeNode {
+func (o *Organization) GetParent() TreeNode {
 	return o.Parent
 }
 
 // SetParent sets an Organization's parent TreeNode
-func (o Organization) SetParent(parent TreeNode) {
+func (o *Organization) SetParent(parent TreeNode) {
 	o.Parent = parent
 	parent.AddChild(o)
 }
@@ -121,23 +129,23 @@ func (o Organization) GetChildren() []TreeNode {
 }
 
 // AddChild adds a child TreeNode to an Organization
-func (o Organization) AddChild(child TreeNode) {
+func (o *Organization) AddChild(child TreeNode) {
 	o.Children = append(o.Children, child)
 }
 
 // GetName returns an Organization's name
-func (o Organization) GetName() string {
+func (o *Organization) GetName() string {
 	return o.Name
 }
 
 // GetOrgByID finds an org by ID
-func GetOrgByID(orgs []Organization, id int) (Organization, error) {
+func GetOrgByID(orgs []Organization, id int) (*Organization, error) {
 	for _, org := range orgs {
 		if org.ID == id {
-			return org, nil
+			return &org, nil
 		}
 	}
-	return Organization{}, errors.New("GetOrgByID: ID out of range")
+	return &Organization{}, errors.New("GetOrgByID: ID out of range")
 }
 
 // RecArea is the data type of recreation areas from data/RecAreas_API_v1.json and IMPLEMENTS TreeNode
