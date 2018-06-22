@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
+	"os"
 )
 
 func main() {
-	output := ""
-
 	orgs := getOrgs()
 	for _, org := range orgs {
 		if org.ID != 0 {
@@ -47,17 +47,22 @@ func main() {
 		childNode.SetParent(parentNode)
 	}
 
-	// Testing n-ary tree using RecAreas
-	for _, recArea := range recAreas {
-		children := ""
-		for _, child := range recArea.GetChildren() {
-			children += fmt.Sprintf("    Child: %s\n", child.GetName())
-		}
-		output += (fmt.Sprintf("RecArea: %s, Parent: %s\n%s", recArea.GetName(), recArea.GetParent().GetName(), children))
+	_, err := os.Stat("output.txt")
+	if !os.IsNotExist(err) {
+		fmt.Println("Replacing content of output.txt with program output...")
+		err := os.Remove("output.txt")
+		checkError(err)
+	} else {
+		fmt.Println("Creating output.txt with program output...")
 	}
 
-	err := ioutil.WriteFile("hello.txt", []byte(output), 0644)
+	file, err := os.OpenFile("output.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	checkError(err)
+	printer := &Printer{0}
+	root, err := GetOrgByID(orgs, 0)
+	checkError(err)
+
+	root.Accept(printer, file)
 }
 
 // TreeNode defines the methods for our n-ary tree of nodes
@@ -69,6 +74,7 @@ type TreeNode interface {
 	GetChildren() []TreeNode
 	AddChild(c TreeNode)
 	GetName() string
+	Accept(v Visitor, w io.Writer)
 }
 
 // Organization is the data type of organizations from data/Organizations_API_v1.json and IMPLEMENTS TreeNode
@@ -131,6 +137,17 @@ func (o *Organization) GetName() string {
 	return o.Name
 }
 
+// Accept accepts a Visitor on behalf of the Organization
+func (o *Organization) Accept(v Visitor, w io.Writer) {
+	err := v.Visit(o, w)
+	checkError(err)
+	v.SetDepth(v.GetDepth() + 1)
+	for _, entity := range o.GetChildren() {
+		entity.Accept(v, w)
+	}
+	v.SetDepth(v.GetDepth() - 1)
+}
+
 // GetOrgByID finds an org by ID
 func GetOrgByID(orgs []*Organization, id int) (*Organization, error) {
 	for _, org := range orgs {
@@ -169,7 +186,7 @@ func (r *RecArea) GetID() int {
 
 // GetType returns RecArea when called on an RecArea object
 func (r *RecArea) GetType() string {
-	return "RecArea"
+	return "Rec Area"
 }
 
 // GetParent returns an RecArea's parent TreeNode
@@ -196,6 +213,17 @@ func (r *RecArea) AddChild(child TreeNode) {
 // GetName returns an RecArea's name
 func (r *RecArea) GetName() string {
 	return r.Name
+}
+
+// Accept accepts a Visitor on behalf of the RecArea
+func (r *RecArea) Accept(v Visitor, w io.Writer) {
+	err := v.Visit(r, w)
+	checkError(err)
+	v.SetDepth(v.GetDepth() + 1)
+	for _, facility := range r.GetChildren() {
+		facility.Accept(v, w)
+	}
+	v.SetDepth(v.GetDepth() - 1)
 }
 
 // GetRecAreaByID finds an recArea by ID
@@ -264,6 +292,12 @@ func (f *Facility) GetName() string {
 	return f.Name
 }
 
+// Accept accepts a Visitor on behalf of the Facility
+func (f *Facility) Accept(v Visitor, w io.Writer) {
+	err := v.Visit(f, w)
+	checkError(err)
+}
+
 // GetFacilityByID finds an facility by ID
 func GetFacilityByID(facilities []*Facility, id int) (*Facility, error) {
 	for _, facility := range facilities {
@@ -311,6 +345,74 @@ func getRecAreaFacilityLinks() []RecAreaFacilityLink {
 	err = json.Unmarshal(recAreaFacilityLinksData, &recAreaFacilityLinks)
 	checkError(err)
 	return recAreaFacilityLinks.RecAreaFacilityLinks
+}
+
+// Visitor represents the visitor in the visitor pattern
+type Visitor interface {
+	Visit(node TreeNode, outStream io.Writer) error
+	WriteOrg(node TreeNode, outStream io.Writer) error
+	WriteRecArea(node TreeNode, outStream io.Writer) error
+	WriteFacility(node TreeNode, outStream io.Writer) error
+	GetDepth() int
+	SetDepth(depth int)
+}
+
+// Printer will implement the visitor pattern to print the data
+type Printer struct {
+	Depth int
+}
+
+// Visit is the entry point into the visitor pattern that visits TreeNodes
+func (p *Printer) Visit(n TreeNode, w io.Writer) error {
+	nodeType := n.GetType()
+	var err error
+	if nodeType == "Organization" {
+		err = p.WriteOrg(n, w)
+	} else if nodeType == "Rec Area" {
+		err = p.WriteRecArea(n, w)
+	} else {
+		err = p.WriteFacility(n, w)
+	}
+	return err
+}
+
+// WriteOrg writes an organization node to the output
+func (p *Printer) WriteOrg(n TreeNode, w io.Writer) error {
+	toPrint := fmt.Sprintf("%s%s: %s Number of Children: %d\n", GetIndent(p.GetDepth()), n.GetType(), n.GetName(), len(n.GetChildren()))
+	_, err := w.Write([]byte(toPrint))
+	return err
+}
+
+// WriteRecArea writes a recArea node to the output
+func (p *Printer) WriteRecArea(n TreeNode, w io.Writer) error {
+	toPrint := fmt.Sprintf("%s%s: %s Number of Facilities: %d\n", GetIndent(p.GetDepth()), n.GetType(), n.GetName(), len(n.GetChildren()))
+	_, err := w.Write([]byte(toPrint))
+	return err
+}
+
+// WriteFacility writes a facility node to the output
+func (p *Printer) WriteFacility(n TreeNode, w io.Writer) error {
+	toPrint := fmt.Sprintf("%s%s: %s\n", GetIndent(p.GetDepth()), n.GetType(), n.GetName())
+	_, err := w.Write([]byte(toPrint))
+	return err
+}
+
+// GetDepth returns the depth of the Printer
+func (p *Printer) GetDepth() int {
+	return p.Depth
+}
+
+// SetDepth reassigns the depth of the Printer
+func (p *Printer) SetDepth(d int) {
+	p.Depth = d
+}
+
+// GetIndent returns the correct indentation given a printer depth n
+func GetIndent(n int) string {
+	if n == 0 {
+		return ""
+	}
+	return "    " + GetIndent(n-1)
 }
 
 func checkError(err error) {
