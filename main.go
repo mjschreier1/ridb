@@ -49,7 +49,7 @@ func main() {
 
 	_, err := os.Stat("output.txt")
 	if !os.IsNotExist(err) {
-		fmt.Println("Replacing content of output.txt with program output...")
+		fmt.Println("Replacing output.txt with program output...")
 		err := os.Remove("output.txt")
 		checkError(err)
 	} else {
